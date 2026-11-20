@@ -61,6 +61,17 @@ KICKER = getattr(data, "KICKER", "THE DAY IN WORLD NEWS")
 STRAP = data.STRAP
 
 _cache = {}
+class _PasteDraw:
+    """Draw wrapper that exposes the image, so a motif can be clipped to its band."""
+
+    def __init__(self, draw):
+        self._d = draw
+        self._image = draw._image
+
+    def __getattr__(self, name):
+        return getattr(self._d, name)
+
+
 REPORT = []   # (label, fontsize, lines, height_used, height_available) for every block
 FAIL = []     # the subset that overflowed its box or crossed the bottom deck
 YMAX = [0]    # lowest ink row actually written
@@ -130,7 +141,22 @@ def block(draw, text, name, size, x, y, maxw, maxh, colour, label=""):
 # ----------------------------------------------------------------- illustrations
 
 def illo(d, x, y, w, h, kind, col):
-    """A flat picture for one story, drawn inside its own band. No text inside."""
+    """A flat picture for one story, drawn inside its own band. No text inside.
+
+    The shapes are drawn on their own canvas and pasted back, so a motif that
+    reaches past its band is clipped at the edge instead of spilling over the
+    headline and body below it.  Drawn straight onto the page, a cyclone's
+    outer arc crossed the text of the two cards beneath it.
+    """
+    w, h = max(1, int(w)), max(1, int(h))
+    band = Image.new("RGB", (w, h), (242, 240, 234))
+    bd = ImageDraw.Draw(band)
+    _illo_motif(bd, 0, 0, w, h, kind, col)
+    d._image.paste(band, (int(x), int(y)))
+    return
+
+
+def _illo_motif(d, x, y, w, h, kind, col):
     d.rectangle([x, y, x + w, y + h], fill=(242, 240, 234))
     cx, cy = x + w // 2, y + h // 2
     s = min(w, h)
@@ -463,6 +489,7 @@ def build():
     top = lead_bottom + 12
 
     # ---------------- second tier: 3 across, as many rows as the data has ----------------
+    d = _PasteDraw(d)
     ILLO2, BAND2 = 30, 12
     cellh = 97
     nrow = (len(data.PANELS) + 2) // 3
